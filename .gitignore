@@ -1,0 +1,15 @@
+# 密钥，绝不提交
+.env
+
+# Python 缓存
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 生成的数据（重新跑 generate_data.py 即可再生）
+data/*.csv
+
+# IDE
+.idea/
+.vscode/
