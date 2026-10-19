@@ -88,9 +88,12 @@ def enrichment_analysis(
     # 只看注释表里、且在背景里的那些基因
     ann = annotation_df[annotation_df["gene"].isin(background_set)]
 
+    # 一次性按 term 分组（不要每个 term 都全表过滤一遍：真实数据注释几十万行，
+    # 循环里反复过滤会慢几十倍）
+    term_to_genes = ann.groupby("term")["gene"].agg(set)
+
     rows = []
-    for term in ann["term"].unique():
-        genes_in_term = set(ann[ann["term"] == term]["gene"])
+    for term, genes_in_term in term_to_genes.items():
         K = len(genes_in_term)
         k = len(genes_in_term & sig_set)
         if K == 0 or k == 0:

@@ -51,6 +51,7 @@ def build_graph():
     builder.add_edge(START, "parse_intent")
 
     # 条件边 1：按分析类型路由
+    # add_conditional_edges 三参数：源节点 / 路由函数（返回字符串）/ 路由返回值→目标节点的映射
     builder.add_conditional_edges(
         "parse_intent", route_after_intent,
         {"load_qc": "load_qc", "report": "report"},

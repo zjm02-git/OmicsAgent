@@ -46,7 +46,11 @@ def parse_intent_node(state: dict) -> dict:
 
 # ══════════ ② 加载 + 质检 ══════════
 def load_qc_node(state: dict, runtime: Runtime) -> dict:
-    """读数据 + 质检，质检通过后从长期记忆读这个用户上次的分析偏好。"""
+    """读数据 + 质检，质检通过后从长期记忆读这个用户上次的分析偏好。
+
+    runtime 是 LangGraph 自动注入的：节点函数签名里声明了 Runtime 参数，
+    就能拿到它来读写长期记忆（runtime.store），不需要自己手动传。
+    """
     dataset_path = state.get("dataset_path", DATASET_PATH)
     expr_file = os.path.join(dataset_path, "expression.csv")
     meta_file = os.path.join(dataset_path, "metadata.csv")

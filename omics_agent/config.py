@@ -15,7 +15,7 @@ load_dotenv()
 
 MODEL_NAME = os.getenv("MODEL_NAME", "deepseek-v4-flash")
 
-# 默认本地 PostgreSQL 连接（和课程 6.2.4 / 7.2 用同一个库）
+# 默认本地 PostgreSQL 连接
 DEFAULT_DB_URL = "postgresql://langgraph_user:123456@localhost:5432/langgraph_db?sslmode=disable"
 
 

@@ -23,25 +23,37 @@ except ImportError:
     _HAS_SCIPY = False
 
 
-def _p_value(a: np.ndarray, b: np.ndarray) -> float:
-    """两组样本的差异显著性 p 值（双尾）。
+def _p_values(mat_a: np.ndarray, mat_b: np.ndarray) -> np.ndarray:
+    """两组样本的差异显著性 p 值（双尾），一次算完所有基因。
 
-    a、b 是两个样本数组。优先用 scipy 的 Welch t 检验；
-    没装 scipy 时退化为正态近似（z 检验）。
+    mat_a、mat_b 是 (n_genes, n_samples) 矩阵。优先用 scipy 的 Welch t 检验
+    （向量化）；没装 scipy 时退化为正态近似（z 检验）。
     """
+    n_a = mat_a.shape[1]
+    n_b = mat_b.shape[1]
+    var_a = mat_a.var(axis=1, ddof=1)
+    var_b = mat_b.var(axis=1, ddof=1)
+    se2 = var_a / n_a + var_b / n_b  # 标准误的平方
+    mean_a = mat_a.mean(axis=1)
+    mean_b = mat_b.mean(axis=1)
+
     if _HAS_SCIPY:
-        return float(_stats.ttest_ind(b, a, equal_var=False).pvalue)
+        # Welch t 检验（向量化）：t 统计量 + Welch–Satterthwaite 自由度 + t 分布
+        with np.errstate(divide="ignore", invalid="ignore"):
+            t_stat = (mean_b - mean_a) / np.sqrt(se2)
+            df = se2 ** 2 / ((var_a / n_a) ** 2 / (n_a - 1) + (var_b / n_b) ** 2 / (n_b - 1))
+            p = 2.0 * _stats.t.sf(np.abs(t_stat), df)
+        # 两组方差都为 0（se2==0）时无法判断：均值相同 → 不显著，不同 → 显著
+        return np.where(se2 == 0, np.where(mean_b == mean_a, 1.0, 0.0), p)
 
     # ── 正态近似 fallback ──
-    n1, n2 = len(a), len(b)
-    v1 = float(np.var(a, ddof=1))
-    v2 = float(np.var(b, ddof=1))
-    se = math.sqrt(v1 / n1 + v2 / n2)  # 标准误
-    if se == 0:
-        return 1.0  # 两组完全没有方差差异，无法判断，视为不显著
-    z = (float(np.mean(b)) - float(np.mean(a))) / se
+    with np.errstate(divide="ignore", invalid="ignore"):
+        z = (mean_b - mean_a) / np.sqrt(se2)
+    _erf = np.vectorize(math.erf)
     # 双尾 p = 2 * (1 - Φ(|z|))，Φ 用误差函数 erf 算
-    return float(2 * (1 - 0.5 * (1 + math.erf(abs(z) / math.sqrt(2)))))
+    p = 2.0 * (1.0 - 0.5 * (1.0 + _erf(np.abs(z) / math.sqrt(2.0))))
+    # 两组完全没有方差差异，无法判断，视为不显著
+    return np.where(se2 == 0, 1.0, p)
 
 
 def differential_expression(
@@ -76,27 +88,30 @@ def differential_expression(
     expr = expr_df.copy()
     expr = expr.set_index(expr.columns[0])
 
-    # 3. 逐个基因算
-    rows = []
-    for gene in expr.index:
-        vals_a = expr.loc[gene, samples_a].astype(float).values
-        vals_b = expr.loc[gene, samples_b].astype(float).values
+    # 3. 向量化算所有基因：先取两组样本的 numpy 矩阵，再一次性算均值/log2FC/p 值。
+    #    （逐基因 for 循环 + .loc 取值，真实数据 2 万基因要跑 2 分多钟）
+    genes = list(expr.index)
+    mat_a = expr[samples_a].to_numpy(dtype=float)  # (n_genes, n_a)
+    mat_b = expr[samples_b].to_numpy(dtype=float)  # (n_genes, n_b)
 
-        mean_a = float(np.mean(vals_a))
-        mean_b = float(np.mean(vals_b))
+    mean_a = mat_a.mean(axis=1)
+    mean_b = mat_b.mean(axis=1)
 
-        # log2 fold change（+1e-6 防 log0）
-        log2fc = float(np.log2((mean_b + 1e-6) / (mean_a + 1e-6)))
+    # log2 fold change（+1e-6 防 log0）
+    log2fc = np.log2((mean_b + 1e-6) / (mean_a + 1e-6))
 
-        p_value = _p_value(vals_a, vals_b)
+    p_values = _p_values(mat_a, mat_b)
 
-        rows.append({
+    rows = [
+        {
             "gene": gene,
-            "mean_a": mean_a,
-            "mean_b": mean_b,
-            "log2fc": log2fc,
-            "pvalue": p_value,
-        })
+            "mean_a": float(mean_a[i]),
+            "mean_b": float(mean_b[i]),
+            "log2fc": float(log2fc[i]),
+            "pvalue": float(p_values[i]),
+        }
+        for i, gene in enumerate(genes)
+    ]
 
     res = pd.DataFrame(rows)
 

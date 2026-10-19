@@ -35,6 +35,8 @@
 | **真实统计计算** | t 检验 + BH 校正 + log2FC | 差异分析是真的在算，不是 LLM 瞎编 |
 | **通路富集分析** | 超几何检验 + BH 校正 | 找出差异基因扎堆的功能通路 |
 | **LLM 结果解读** | 把基因列表翻译成人话 | 结果可解释，不是冷冰冰的数字 |
+| **回溯 / 时间旅行** | get_state_history + update_state | 跑完回到历史检查点换参数重跑，不从头来 |
+| **真实数据验证** | TCGA-BRCA 226 样本 × 2 万基因 | 证明项目能落地，不是玩具 |
 
 ---
 
@@ -87,7 +89,8 @@
 
 ```
 多组学数据分析智能体/
-├── app.py                  # 入口：跑一次完整分析
+├── app.py                  # 入口：跑一次完整分析（含回溯重跑）
+├── backtrack_demo.py       # 回溯（时间旅行）功能演示
 ├── omics_agent/            # 核心代码包
 │   ├── config.py           # 读配置、造模型、造检查点/记忆（工厂模式）
 │   ├── state.py            # 定义 State（状态）
@@ -96,7 +99,9 @@
 │   ├── nodes.py            # 8 个节点函数（含人工确认、读写记忆）
 │   └── graph.py            # 把节点拼成图 + 条件路由 + 检查点/记忆
 ├── data/
-│   └── generate_data.py    # 生成模拟数据（可换真实数据）
+│   ├── generate_data.py    # 生成模拟数据（100 基因 × 8 样本，开箱即用）
+│   ├── fetch_tcga.py       # 下载真实 TCGA-BRCA 数据（GDC 官方 API）
+│   └── fetch_go.py         # 下载真实 GO 注释（MSigDB）
 ├── tests/
 │   └── test_pipeline.py    # 冒烟测试（人工确认 + 长期记忆复用）
 ├── docs/
@@ -127,13 +132,22 @@ pip install -r requirements.txt
 DEEPSEEK_API_KEY=你的key
 ```
 
-### 3. 生成模拟数据
+### 3. 准备数据（二选一）
+
+**方式一：模拟数据（开箱即用，100 基因 × 8 样本）**
 
 ```bash
 python data/generate_data.py
 ```
 
-会生成 `data/expression.csv`（表达矩阵）、`data/metadata.csv`（样本分组）、`data/gene_ontology.csv`（通路注释）。
+**方式二：真实 TCGA-BRCA 数据（推荐，用于真实场景验证）**
+
+```bash
+python data/fetch_tcga.py   # 从 GDC 官方 API 下载表达矩阵（226 样本 × 约 2 万基因，约 10 分钟）
+python data/fetch_go.py     # 从 MSigDB 下载 GO 注释
+```
+
+两种方式都生成相同的三个 csv（`expression.csv` 表达矩阵 / `metadata.csv` 样本分组 / `gene_ontology.csv` 通路注释），格式完全一致，代码不用改。
 
 ### 4. 跑一次完整分析
 
@@ -152,7 +166,7 @@ python app.py --auto # 自动确认，跳过人工确认（演示用）
 
 ## 六、后续规划（Roadmap）
 
-- [ ] 换真实公开数据（TCGA / GEO）
+- [x] 换真实公开数据（TCGA-BRCA：226 样本 × 约 2 万基因，已接入）
 - [x] 持久化换成 PostgresSaver（跨重启不丢）
 - [ ] Fork 分叉：同一份数据用不同阈值跑两条分支对比
 - [x] 富集分析（GO / KEGG）

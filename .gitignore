@@ -13,3 +13,6 @@ data/*.csv
 # IDE
 .idea/
 .vscode/
+
+# Obsidian 笔记配置
+docs/.obsidian/
